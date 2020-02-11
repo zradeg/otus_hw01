@@ -106,7 +106,7 @@
 
 11. Полученный образ добавляю в db vagrant, проверяю наличие, заменяю имя образа в Vagrantfile, поднимаю на его основе гостевой хост, захожу в него
 
-```$ vagrant box add --name kernel_update_by_yum centos-7-5-kernel_update_by_yum```
+```$ vagrant box add --name kernel_update_by_yum 1.0 centos-7-5-kernel_update_by_yum```
 
 ```$ vagrant box list
 >centos/7             (virtualbox, 1905.1)
