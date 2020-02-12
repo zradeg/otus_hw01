@@ -1,9 +1,9 @@
 # Describe VMs
 MACHINES = {
-  # VM name "kernel update"
-  :"kernel-update" => {
+  # VM name "manual kernel update"
+  :"manual-kernel-update" => {
               # VM box
-              :box_name => "zradeg/centos-7-5-kernel_update_by_yum",
+              :box_name => "centos-7-5-manual_kernel_update_v2",
               # VM CPU count
               :cpus => 2,
               # VM RAM size (Mb)
@@ -17,8 +17,8 @@ MACHINES = {
 
 Vagrant.configure("2") do |config|
   MACHINES.each do |boxname, boxconfig|
-    # Enable shared folders
-    config.vm.synced_folder ".", "/vagrant", create: true
+    # Disable shared folders
+    config.vm.synced_folder ".", "/vagrant", disabled: true
     # Apply VM config
     config.vm.define boxname do |box|
       # Set VM base box and hostname
@@ -42,6 +42,11 @@ Vagrant.configure("2") do |config|
         v.memory = boxconfig[:memory]
         v.cpus = boxconfig[:cpus]
       end
+	config.ssh.insert_key = false
+    box.vm.provision "shell", inline: <<-SHELL
+    	mkdir -p ~root/.ssh
+    	cp ~vagrant/.ssh/auth* ~root/.ssh
+    SHELL
     end
   end
-end
+end 
