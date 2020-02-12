@@ -12,112 +12,200 @@
 * Oracle VirtualBox 5.2.36 r135684
 * packer 1.5.1
 * github: https://github.com/zradeg
+* оригинальный Vagrantfile из ДЗ c с модицикацией: увеличено вдвое количество ядер и вчетверо количество памяти, дабы сократить время сборки ядра и модулей.
 
 **Приглашение командной строки хостовой системы выглядит так:**
 
-```$```
+`$`
 
 **Приглашение командной строки гостевой системы выглядит так:**
 
-```vagrant@$```
+`vagrant@$`
 
 ## Подготовка
-1. Установка vagrant
+1.1. Установка vagrant
 
-```$ wget https://releases.hashicorp.com/vagrant/2.2.7/vagrant_2.2.7_x86_64.deb```
+`$ wget https://releases.hashicorp.com/vagrant/2.2.7/vagrant_2.2.7_x86_64.deb`
 
-```$ sudo dpkg -i vagrant_2.2.7_x86_64.deb```
+`$ sudo dpkg -i vagrant_2.2.7_x86_64.deb`
 
-2. Установка packer
+1.2. Установка packer
 
-```$ wget https://releases.hashicorp.com/packer/1.4.4/packer_1.4.4_linux_amd64.zip```
+`$ wget https://releases.hashicorp.com/packer/1.4.4/packer_1.4.4_linux_amd64.zip`
 
-```$ sudo gzip -d packer_1.4.4_linux_amd64.zip -C /usr/local/bin/packer```
+`$ sudo gzip -d packer_1.4.4_linux_amd64.zip -C /usr/local/bin/packer`
 
-```$ sudo chmod +x /usr/local/bin/packer```
+`$ sudo chmod +x /usr/local/bin/packer`
 
-3. В домашней директории создаю поддиректорию и перехожу в нее
+1.3. В домашней директории создаю поддиректорию и перехожу в нее
 
-```$ mkdir -p ./otus/hw01 && cd ./otus/hw01```
+`$ mkdir -p ./otus/hw01 && cd ./otus/hw01`
 
-3. Создаю форк репозитория, затем клонирую репозиторий из своего аккаунта и перехожу в директорию
+1.4. Создаю форк репозитория, затем клонирую репозиторий из своего аккаунта и перехожу в директорию
 
-```$ git clone git@github.com:zradeg/manual_kernel_update.git```
+`$ git clone git@github.com:zradeg/manual_kernel_update.git`
 
-```$ cd manual_kernel_update```
+`$ cd manual_kernel_update`
 
-4. Поднимаю виртуалку, подключаюсь, проверяю текущую версию ядра, произвожу обновление пакетов из репозитория:
+## Обновление ядра из исходников
 
-```$ vagrant up```
+2.1. vagrant up, vagrant ssh, проверяю версию рабочего ядра и ставлю все необходимые пакеты для обновления ядра вручную
 
-```$ vagrant ssh```
+`vagrant@$ uname -rs`
 
-```vagrant@$ uname -r```
-> 3.10.0-957.12.2.el7.x86_64
+>Linux 3.10.0-957.12.2.el7.x86_64
 
-```vagrant@$ sudo yum -y update```
+`vagrant@$sudo yum -y install wget vim ncurses-devel make gcc bc bison flex elfutils-libelf-devel openssl-devel grub2`
 
-5. Подключаю репозиторий **epel**, запускаю установку ядра версии *ml*:
+2.2. Перехожу в директорию, где буду собирать ядра, качаю архив с исходниками, распаковываю и перехожу в директорию с исходниками	
 
-```vagrant@$ sudo yum install -y http://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm```
+`vagrant@$ cd /usr/src/kernels/`
 
-```vagrant@$ sudo yum --enablerepo elrepo-kernel install kernel-ml -y```
+`vagrant@$ sudo wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.5.2.tar.xz`
 
-6. Вношу изменения в конфигурацию загрузчика, определяю новое ядро дефолтным при старте системы, перезагружаю виртуалку:
+`vagrant@$ sudo tar --xz -xvf linux-5.5.2.tar.xz`
 
-```vagrant@$ sudo grub2-mkconfig -o /boot/grub2/grub.cfg```
+`vagrant@$ sudo cd linux-5.5.2/`
 
-```vagrant@$ sudo grub2-set-default 0```
+2.3. Делаю копию конфига текущего ядра, и применяю конфигурацию его конфигурацию
 
-```vagrant@$ sudo reboot```
+`vagrant@$ sudo cp -v /boot/config-3.10.0-957.12.2.el7.x86_64 ./.config`
 
-7. Захожу в гостевой хост, проверяю версию ядра
+`vagrant@$ sudo make olddefconfig`
 
-```$ vagrant up```
+2.4. Вручную убираю заведомо лишние модули, т.к. драйвера для ноутбуков и GPU и пр.
 
-```$ vagrant ssh```
+`vagrant@$ sudo make menuconfig`
 
-```vagrant@$ uname -r```
-> 5.5.2-1.el7.elrepo.x86_64
+2.5. Приступаю к сборке, использую ключ -j4 для разделения процесса сборки на несколько потоков, чтобы по максимуму использовать выделенные мощности. Собираю непосредственно ядро и упаковываю его, произвожу сборку модулей, устанавливаю все по очереди, не забывая про хедеры, чтобы встали vb guest additions
 
-8. Удаляю старое ядро и его компоненты, ставлю компоненты к новому ядру, выключаю гостевой хост:
+`vagrant@$ sudo make -j4 bzImage`
 
-```vagrant@$ sudo yum erase kernel-3.10.0 kernel-headers-3.10.0 kernel-devel -3.10.0```
+`vagrant@$ sudo make -j4 modules`
+ 
+`vagrant@$ sudo make -j4`
+ 
+`vagrant@$ sudo make -j4 modules_install`
+ 
+`vagrant@$ sudo make -j4 headers_install`
+ 
+`vagrant@$ sudo make -j4 install`
 
-```vagrant@$ sudo yum --enablerepo elrepo-kernel install kernel-ml-headers kernel-ml-devel gcc -y```
+>VirtualBox Guest Additions: Building the modules for kernel 5.5.2.
 
-9. Cредствами virtualbox настраиваю подключение общих папок, подключаю виртуальный cd с VirtualBox Guest Additions, снова поднимаю хост, захожу, запускаю установку vbguestadds и подмонтирую общую папку :
+>VirtualBox Guest Additions: Look at /var/log/vboxadd-setup.log to find out what went wrong
 
-```$ vagrant up```
+2.6. Проверяю, установились ли vb guest additions
 
-```$ vagrant ssh```
+`vagrant@$ sudo lsmod | grep vbox`
 
-```vagrant@$ sudo mkdir /mnt/cdrom && sudo mkdir /mnt/d```
+>vboxsf                 57344  1
+vboxguest             356352  2 vboxsf
 
-```vagrant@$ sudo mount /dev/cdrom /mnt/cdrom```
+2.7. Обновляю загрузчик и перезагружаюсь
 
-```vagrant@$ sudo /mnt/cdrom/VBoxLinuxAdditions.run```
+`vagrant@$ sudo grub2-mkconfig -o /boot/grub2/grub.cfg`
 
-```vagrant@$ sudo mount -t vboxsf D_DRIVE /mnt/d```
+`vagrant@$ sudo grub2-set-default 0`
 
-10. Создаю новый образ средствами vagrant
+`vagrant@$ sudo reboot`
 
-```$ vagrant package --base 'manual_kernel_update_kernel-update_1580998659941_3141' --output centos-7-5-kernel_update_by_yum```
+2.8. Очередной vagrant ssh и проверяю версию ядра
 
-11. Полученный образ добавляю в db vagrant, проверяю наличие, заменяю имя образа в Vagrantfile, поднимаю на его основе гостевой хост, захожу в него
+`vagrant@$ uname -rs`
 
-```$ vagrant box add --name kernel_update_by_yum 1.0 centos-7-5-kernel_update_by_yum```
+>Linux 5.5.2
 
-```$ vagrant box list
->centos/7             (virtualbox, 1905.1)
-centos-7-5-kernel_update_by_yum (virtualbox, 0)
+Бинго!
 
-```$ vagrant up```
+2.9. Из командной строки хостовой машины создаю общую папку со ссылкой на диск D:, предварительно выяснив имя виртуалки, с которой работаю посредством VBoxManage list runningvms
 
-```$ vagrant ssh```
+`$ VBoxManage sharedfolder add manual_kernel_update_kernel-update_1581347777248_21739 --name disk_d --hostpath d:\`
 
-```vagrant@$ uname -r```
-> 5.5.2-1.el7.elrepo.x86_64
+2.10. В виртуалке удаляю старое ядро и компоненты, также удаляю исходники свежеустановленного ядра
 
-12. Заливаю новый образ в vagrant cloud
-https://app.vagrantup.com/zradeg/boxes/centos-7-5-kernel_update_by_yum
+`vagrant@$ sudo yum erase kernel-3.10.0`
+
+`vagrant@$ sudo yum erase kernel-3.10.0 kernel-headers.x86_64 kernel-devel-3.10.0`
+
+`vagrant@$ sudo rm -rf /usr/src/kernels/linux-5.5.2`
+
+2.11. Создаю точку монтирования для общей папки, монтирую ее, проверяю результат
+
+`vagrant@$ sudo mkdir /mnt/d`
+
+`vagrant@$ sudo mount -t vboxsf disk_d /mnt/d`
+
+`vagrant@$ df -h`
+
+>Filesystem      Size  Used Avail Use% Mounted on
+devtmpfs        2.0G     0  2.0G   0% /dev
+tmpfs           2.0G     0  2.0G   0% /dev/shm
+tmpfs           2.0G  8.4M  2.0G   1% /run
+tmpfs           2.0G     0  2.0G   0% /sys/fs/cgroup
+/dev/sda1        40G  5.7G   35G  15% /
+tmpfs           394M     0  394M   0% /run/user/1000
+disk_d          688G  315G  373G  46% /mnt/d
+
+## Загрузка образа в vagramt cloud и проверка
+
+3.1. Для уменьшения объема образа, а так же для тогоа, чтобы предотвратить возникновение ошибки "Warning: Authentication failure. Retrying..." и невозможности залогиниться без пароля по ssh-ключу, запускаю следующий скрипт:
+
+`vagrant@$ sudo yum update -y`
+
+`vagrant@$ sudo yum clean all`
+
+`vagrant@$ sudo mkdir -pm 700 /home/vagrant/.ssh`
+
+`vagrant@$ sudo curl -sL https://raw.githubusercontent.com/mitchellh/vagrant/master/keys/vagrant.pub -o /home/vagrant/.ssh/authorized_keys`
+
+`vagrant@$ sudo chmod 0600 /home/vagrant/.ssh/authorized_keys`
+
+`vagrant@$ sudo chown -R vagrant:vagrant /home/vagrant/.ssh`
+
+`vagrant@$ sudo rm -rf /tmp/*`
+
+`vagrant@$ sudo rm  -f /var/log/wtmp /var/log/btmp`
+
+`vagrant@$ sudo rm -rf /var/cache/* /usr/share/doc/*`
+
+`vagrant@$ sudo rm -rf /var/cache/yum`
+
+`vagrant@$ sudo rm -rf /vagrant/home/*.iso`
+
+`vagrant@$ sudo rm  -f ~/.bash_history`
+
+`vagrant@$ sudo history -c`
+
+`vagrant@$ sudo rm -rf /run/log/journal/*`
+
+`vagrant@$ sudo dd if=/dev/zero of=/EMPTY bs=1M`
+
+`vagrant@$ sudo rm -f /EMPTY`
+
+3.2. Средствами vagrant собираю образ, подключаю его в БД vagrant и заливаю в облако, предварительно залогинившись
+
+`$ vagrant package --base manual_kernel_update_kernel-update_1581347777248_21739 --output centos-7-5-manual_kernel_update_v2.box`
+
+`$ vagrant box add --name manual_kernel_update centos-7-5-manual_kernel_update_v2.box`
+
+`$ vagrant cloud publish --release zradeg/centos-7-5-manual_kernel_update_v2 1.0 virtualbox centos-7-5-manual_kernel_update_v2.box`
+
+3.3. Исправляю Vagrantfile, вернув назад количество ядер и объем выделенной памяти, а также непосредственно ссылку на образ, переношу Vagrantfile на другую машину, запускаю и проверяю версию ядра и наличие vb guest additions
+
+`vagrant@$ # uname -rs`
+
+>Linux 5.5.2
+
+`vagrant@$ sudo lsmod | grep vbox`
+
+>vboxsf                 57344  0
+vboxguest             356352  2 vboxsf
+
+## Подведение итога
+
+*Установлено новое ядро из исходника версии 5.5.2
+*Установлен vbox guest additions - есть возможность монтировать общие папки
+*Образ сжат и загружен в облако vagrant
+*При скачивании на другой машине отрабатывает vagrant up с вытягиванием образа из облака и развертыванием виртуальной системы с новым ядром, сохраняя возможность беспарольного подключения по ssh-ключу
+
